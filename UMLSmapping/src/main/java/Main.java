@@ -1,5 +1,13 @@
-import java.util.ArrayList; 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
+import com.mysql.jdbc.ResultSet;
+
 import gov.nih.nlm.uts.webservice.AtomDTO;
 import gov.nih.nlm.uts.webservice.AttributeDTO;
 import gov.nih.nlm.uts.webservice.Psf;
@@ -26,7 +34,7 @@ public class Main {
 	private static String serviceName;
 
 	
-	public static void main(String[] args) throws UtsFault_Exception {	
+	public static void main(String[] args) throws UtsFault_Exception, InstantiationException, IllegalAccessException, ClassNotFoundException, SQLException {	
 		//__________________________________________________________________________________________________________
 			
 		try {
@@ -41,6 +49,19 @@ public class Main {
 		//__________________________________________________________________________________________________________
 		
 
+		
+		Connection conn = newConnection();
+        
+        // Methode map
+        Map<String, String> map = new HashMap<String, String>();
+		java.sql.Statement stt = conn.createStatement();
+		java.sql.ResultSet res = stt.executeQuery("SELECT CUI_UMLS "
+        		+ "FROM  cimo3_cui_umls "); 
+		 while (res.next()) {
+			 map.put(res.getString("CUI_UMLS"), "");
+		 }
+		 
+		 System.out.println(map.isEmpty()); 
 
 		
 		// Authentification 
@@ -85,6 +106,7 @@ public class Main {
 		        String sourceId = atom.getCode().getUi();
 		        result_ui.add(sourceId);	       
 		        result_ui.add(name);
+		        
 		        }
 
 
@@ -106,7 +128,18 @@ public class Main {
 		singleUseTicket = getProxyTicket(ticketGrantingTicket, serviceName);
 	}
 
-
+	private static Connection newConnection() throws InstantiationException, IllegalAccessException, ClassNotFoundException, SQLException {
+		String url = "jdbc:mysql://localhost/ime";
+        String user = "root";
+        String pswd = "";
+		     
+        	Class.forName("com.mysql.jdbc.Driver").newInstance();
+            System.out.println("Driver O.K.");
+            Connection conn = DriverManager.getConnection(url, user, pswd);
+            System.out.println("Connexion effective !");         
+       
+           return conn;
 	
+	}
 }
 
