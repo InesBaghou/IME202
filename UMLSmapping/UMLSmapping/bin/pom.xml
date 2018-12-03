@@ -1,0 +1,42 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>fr.isped</groupId>
+  <artifactId>UMLS4</artifactId>
+  <version>0.0.1-SNAPSHOT</version>
+  <name>UMLS4</name>
+  
+  
+  <properties>
+    <umls.soap.api.version>1.3.0.RELEASE</umls.soap.api.version>
+</properties>
+
+<repositories>
+
+  <repository>
+    <id>FTP-SERVER</id>
+    <url>ftp://ftp.nlm.nih.gov/nlmdata/tools_repo/public_html/</url>
+  </repository>
+</repositories>
+
+<dependencies>
+  <dependency>
+     <groupId>gov.nih.nlm.umls</groupId>
+     <artifactId>umls-uts-ws-client-classes</artifactId>
+     <version>${umls.soap.api.version}</version>
+  </dependency>
+  <dependency>
+     <groupId>org.apache.maven.wagon</groupId>
+     <artifactId>wagon-ftp</artifactId>
+     <version>2.10</version>      
+  </dependency>
+</dependencies>
+<build>
+    <extensions>
+        <extension>
+           <groupId>org.apache.maven.wagon</groupId>
+           <artifactId>wagon-ftp</artifactId>
+           <version>1.0-beta-5</version>
+        </extension>
+    </extensions>
+</build>
+</project>
