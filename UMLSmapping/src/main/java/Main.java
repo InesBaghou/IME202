@@ -1,24 +1,15 @@
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
-import com.mysql.jdbc.ResultSet;
-
 import gov.nih.nlm.uts.webservice.AtomDTO;
-import gov.nih.nlm.uts.webservice.AttributeDTO;
 import gov.nih.nlm.uts.webservice.Psf;
-import gov.nih.nlm.uts.webservice.SourceAtomClusterDTO;
-import gov.nih.nlm.uts.webservice.UiLabel;
-import gov.nih.nlm.uts.webservice.UiLabelRootSource;
 import gov.nih.nlm.uts.webservice.UtsFault_Exception;
 import gov.nih.nlm.uts.webservice.UtsWsContentController;
 import gov.nih.nlm.uts.webservice.UtsWsContentControllerImplService;
-import gov.nih.nlm.uts.webservice.UtsWsFinderController;
-import gov.nih.nlm.uts.webservice.UtsWsFinderControllerImplService;
 import gov.nih.nlm.uts.webservice.UtsWsMetadataController;
 import gov.nih.nlm.uts.webservice.UtsWsMetadataControllerImplService;
 import gov.nih.nlm.uts.webservice.UtsWsSecurityController;
@@ -34,7 +25,9 @@ public class Main {
 	private static String serviceName;
 
 	
-	public static void main(String[] args) throws UtsFault_Exception, InstantiationException, IllegalAccessException, ClassNotFoundException, SQLException {	
+	
+	public static void main(String[] args) throws UtsFault_Exception {	
+		long startTime = System.nanoTime(); // start Timer
 		//__________________________________________________________________________________________________________
 			
 		try {
@@ -47,73 +40,116 @@ public class Main {
 			 System.out.println("Error!!!" + e.getMessage());
 			}
 		//__________________________________________________________________________________________________________
-		
-
-		
-		Connection conn = newConnection();
+			
+		String url = "jdbc:mysql://localhost/ime";
+        String user = "root";
+        String pwd = "";
         
-        // Methode map
-        Map<String, String> map = new HashMap<String, String>();
-		java.sql.Statement stt = conn.createStatement();
-		java.sql.ResultSet res = stt.executeQuery("SELECT CUI_UMLS "
-        		+ "FROM  cimo3_cui_umls "); 
-		 while (res.next()) {
-			 map.put(res.getString("CUI_UMLS"), "");
-		 }
-		 
-		 System.out.println(map.isEmpty()); 
-
+        try {
+        	Class.forName("com.mysql.jdbc.Driver").newInstance();
+            System.out.println("Driver O.K.");
+            Connection con = DriverManager.getConnection(url, user, pwd);
+            System.out.println("Connexion effective !"); 	
 		
-		// Authentification 
-		// Step 1 - Proxy Grant ticket
-			String username = "deannawung";
-			String password = "m2sitistermino#";
+	        Map<String, ArrayList<String>> map = new HashMap<String, ArrayList<String>>(); 
+	        //key is UMLS, ArrayList contains all matching CIM10 possibilities
+			java.sql.Statement stt = con.createStatement();
+			java.sql.ResultSet res = stt.executeQuery("SELECT CUI_UMLS "
+	        		+ "FROM  cimo3_cui_umls ");
 			
-			try {
-				ticketGrantingTicket = utsSecurityService.getProxyGrantTicket(username, password);
-			} catch (Exception e) {
-				System.out.println("Ticket failed");
-			}
-			
-		// Step 2 - Single use ticket (service ticket) 
-			serviceName = "http://umlsks.nlm.nih.gov";
-			newTicket();			
+			//get UMLS code results from table 
+			 while (res.next()) { // get while there are results,
+				 ArrayList<String> myArray = new ArrayList<String>();
+				 map.put(res.getString("CUI_UMLS"), myArray); //populate hashmap with UMLS code, leave other side empty 
+			 }
+			 
+			 System.out.println(map.isEmpty()); 
 	
 			
-			//Search
-			String currentUmlsRelease = utsMetadataService.getCurrentUMLSVersion(singleUseTicket);
-			
-			Psf myPsf = new Psf();	
-			
-			myPsf.setIncludeObsolete(false);
-			myPsf.setIncludeSuppressible(false);
-			
+			// Authentification to connect to API 
+			// Step 1 - Proxy Grant ticket
+				String username = "deannawung";
+				String password = "m2sitistermino#";
+				
+				try {
+					ticketGrantingTicket = utsSecurityService.getProxyGrantTicket(username, password);
+				} catch (Exception e) {
+					System.out.println("Ticket failed");
+				}
+				
+			// Step 2 - Single use ticket (service ticket) 
+				serviceName = "http://umlsks.nlm.nih.gov";
+				newTicket();			
+				
+				
+			//Step 3 - Preparation du myPsf
+				String currentUmlsRelease = utsMetadataService.getCurrentUMLSVersion(singleUseTicket);
+				Psf myPsf = new Psf();	
+				myPsf.setIncludeObsolete(false);
+				myPsf.setIncludeSuppressible(false);	
+				myPsf.getIncludedSources().add("ICD10CM");	
+				
+				List<AtomDTO> atoms = new ArrayList<AtomDTO>();
+				List<String> result_ui = new ArrayList<String>(); //recupere les codes CIM10
+				System.out.println("top"); 
+				
+			// Application de la methode pour chaque cle de la map
+				for(String key: map.keySet()) {
+					newTicket();
+					atoms = utsContentService.getConceptAtoms(singleUseTicket, currentUmlsRelease, key, myPsf);
+					if(atoms.isEmpty() == false) {
+						for (AtomDTO atom:atoms) {				
+							String sourceId = atom.getCode().getUi();
+					        result_ui.add(0, sourceId.replaceAll("[\\s\\p{Punct}]","")); //remove dots from CIM10 code
+						}
+					map.get(key).add(result_ui.get(0));	//get key (umls code) and add CIM10 code to arraylist			
+					}
 
-			myPsf.getIncludedSources().add("ICD10CM");	
-
-			
-			List<AtomDTO> atoms = new ArrayList<AtomDTO>();
-			List<String> result_ui = new ArrayList<String>();
-			
-			newTicket();
-			
-		    atoms = utsContentService.getConceptAtoms(singleUseTicket, currentUmlsRelease, "C0496758", myPsf);
-		    
-		    for (AtomDTO atom:atoms) {				
-		        String aui = atom.getUi();
-		        String tty = atom.getTermType();
-		        String name = atom.getTermString().getName();
-		        String sourceId = atom.getCode().getUi();
-		        result_ui.add(sourceId);	       
-		        result_ui.add(name);
-		        
-		        }
-
-
-			System.out.println(result_ui);
+				}	
+				
+				//remove empty values in hashmap (UMLS codes with no CIM10 code)
+				Iterator<Map.Entry<String, ArrayList<String>>> it = map.entrySet().iterator();
+				while (it.hasNext()) {
+				    Map.Entry<String, ArrayList<String>> e = it.next();
+				    String key = e.getKey();
+				    ArrayList<String>value = e.getValue();
+				    if (value.isEmpty()) {
+				        it.remove();
+				    }
+				}
+				System.out.println("hashmap done");
+				
+				//System.out.println(map); //print map
+				
+				// Association dans la Map des codes CIM10 a leur code UMLS associe 
+				String requete="CREATE TABLE IF NOT EXISTS UMLS_CIM10 (`CodeCIM10` VARCHAR(50), `CodeUMLS` VARCHAR(50))";
+				stt.execute(requete);
+				System.out.println("fini 2");
+				for (Map.Entry<String, ArrayList<String>> entry:map.entrySet()) {
+					String codeUMLS = entry.getKey();
+					String codeCIM10 = entry.getValue().get(0);  //get first value of arraylist (there is only one value anyway)
+					String insert = "INSERT INTO UMLS_CIM10 (CodeCIM10, CodeUMLS) VALUES (?,?)";	
+					java.sql.PreparedStatement prepare = con.prepareStatement(insert);
+					prepare.setString(1, codeCIM10);
+					prepare.setString(2, codeUMLS);
+					prepare.execute();				
+				}
+				System.out.println("associations done"); 
 	
+
+        	}catch (Exception e) {
+	            e.printStackTrace();
+	          }
+        
+        // end Timer and print time
+        long endTime   = System.nanoTime();
+    	long totalTime = (endTime - startTime)/(1000000000*60);
+    	System.out.println("Total time : "+totalTime+" mins");
+        
 	}
+        
 
+	
 	
 	private static  String getProxyTicket(String ticket, String serviceName){	 
 			try {
@@ -128,18 +164,10 @@ public class Main {
 		singleUseTicket = getProxyTicket(ticketGrantingTicket, serviceName);
 	}
 
-	private static Connection newConnection() throws InstantiationException, IllegalAccessException, ClassNotFoundException, SQLException {
-		String url = "jdbc:mysql://localhost/ime";
-        String user = "root";
-        String pswd = "";
-		     
-        	Class.forName("com.mysql.jdbc.Driver").newInstance();
-            System.out.println("Driver O.K.");
-            Connection conn = DriverManager.getConnection(url, user, pswd);
-            System.out.println("Connexion effective !");         
-       
-           return conn;
-	
-	}
+		/**
+	SELECT *
+	FROM diagnostic as D, patient_diag as PD, patient as P, cimo3_cui_umls as C, umls_cim10 as U
+	WHERE D.TypeCode='2' AND D.NumDiag = PD.NumDiag AND PD.NumPatient=P.NumPatient AND D.CodeDiag=U.CodeCIM10 AND U.CodeUMLS=C.CUI_UMLS;
+	//la requete maaaarche :)
+	}**/
 }
-
